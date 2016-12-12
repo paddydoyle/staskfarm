@@ -38,16 +38,16 @@ each separated by a semi-colon (;).
 
 This would be placed inside a normal `sbatch` script as follows:
 
-  #!/bin/sh
-  #SBATCH -n 4
-  #SBATCH -N 2
-  #SBATCH -t 00:30:00     # 1 day and 3 hours
-  #SBATCH -p debug        # partition name
-  #SBATCH -J my\_job\_name  # sensible name for the job
-
-  # add the staskfarm script to your PATH if necessary
-  # run the script, optionally in verbose mode
-  staskfarm -v commands.txt
+    #!/bin/sh
+    #SBATCH -n 4
+    #SBATCH -N 2
+    #SBATCH -t 00:30:00     # 1 day and 3 hours
+    #SBATCH -p debug        # partition name
+    #SBATCH -J my\_job\_name  # sensible name for the job
+    
+    # add the staskfarm script to your PATH if necessary
+    # run the script, optionally in verbose mode
+    staskfarm -v commands.txt
 
 In particular, set the `#SBATCH -n` and `#SBATCH -N` parameters to match
 the number of nodes and/or cores that you need; `#SBATCH -n` will define
