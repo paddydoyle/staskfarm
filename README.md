@@ -7,6 +7,11 @@ Simple taskfarm script for a Slurm environment.
 Take a file of tasks (one per line) and create slurm multi-prog
 config to execute those tasks. Each task can comprise of multiple commands.
 
+For Slurm partitions with `OverSubscribe=Yes` (formerly `Shared=Yes`),
+**Job Arrays** are a better solution for submitting multiple tasks. However, with
+`OverSubscribe=Exclusive`, job arrays will allocate a full node for each serial
+task, which is probably not what you want.
+
 ## Background
 
 The slurm multi-prog setup can be difficult for some
@@ -20,6 +25,9 @@ scenarios:
 * the number of commands must match exactly the number of slurm tasks (-n),
   which means updating two files if you wish to add or remove tasks
 
+As noted above, Slurm Job Arrays are a better option to multi-prog, unless
+the `OverSubscribe=Exclusive` option is set on the partition.
+
 ## Usage
 
 Usage: `staskfarm [-v] command\_filename`
@@ -28,9 +36,26 @@ The `<command_filename>` must have one individual task per
 line. The task can comprise of multiple bash shell commands,
 each separated by a semi-colon (;).
 
+This would be placed inside a normal `sbatch` script as follows:
+
+  #!/bin/sh
+  #SBATCH -n 4
+  #SBATCH -N 2
+  #SBATCH -t 00:30:00     # 1 day and 3 hours
+  #SBATCH -p debug        # partition name
+  #SBATCH -J my\_job\_name  # sensible name for the job
+
+  # add the staskfarm script to your PATH if necessary
+  # run the script, optionally in verbose mode
+  staskfarm -v commands.txt
+
+In particular, set the `#SBATCH -n` and `#SBATCH -N` parameters to match
+the number of nodes and/or cores that you need; `#SBATCH -n` will define
+the maximum number of simultaneous tasks that will be executed..
+
 ## Examples
 
-For example, the following shows 6 tasks:
+For example, the following `commands.txt` example shows 6 tasks:
 
     ./my_prog my_input01 > my_output01
     ./my_prog my_input02 > my_output02
@@ -41,7 +66,7 @@ For example, the following shows 6 tasks:
 
 Note that if you supply more tasks than allocated CPU cores, it
 will allocate them in a simple round-robin manner. So if you have
-allocated 8 cores, it is fine to have the following:
+allocated 8 cores, it is fine to have the following in the `commands.txt`:
 
     ./my_prog my_input01 > my_output01
     ./my_prog my_input02 > my_output02
@@ -60,7 +85,7 @@ allocated 8 cores, it is fine to have the following:
     ./my_prog my_input15 > my_output15
     ./my_prog my_input16 > my_output16
 
-A more complex example, showing 4 tasks which include loops:
+A more complex sample `commands.txt`, showing 4 tasks which include loops:
 
     cd sample01; for i in controls patients; do ./my_prog $i; done
     cd sample02; for i in controls patients; do ./my_prog $i; done
