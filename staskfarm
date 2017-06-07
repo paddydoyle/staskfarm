@@ -1,6 +1,7 @@
 #!/bin/bash
 
-# 2014-07-07 <paddy@tchpc.tcd.ie>
+# adapted from https://github.com/paddydoyle/staskfarm
+# v1 2017/04/20 C.Meesters (ZDV)
 # Simple taskfarm script for a Slurm environment.
 #
 # Purpose: take a file of tasks (one per line) and create slurm multi-prog
@@ -17,208 +18,236 @@
 #   which means updating two files if you wish to add or remove tasks
 #
 
+VERSION='0.0.1'
+TASKFARMDIR="/scratch/${SLURM_JOB_ID}/taskfarm"
 
-function usage {
-	cat <<-EOM
-	Usage: $(basename $0) [-v] command_filename
-	
-	The <command_filename> must have one individual task per
-	line. The task can comprise of multiple bash shell commands,
-	each separated by a semi-colon (;).
-	
-	For example, the following shows 6 tasks:
-	
-	    ./my_prog my_input01 > my_output01
-	    ./my_prog my_input02 > my_output02
-	    ./my_prog my_input03 > my_output03
-	    ./my_prog my_input04 > my_output04
-	    ./my_prog my_input05 > my_output05
-	    ./my_prog my_input06 > my_output06
-	
-	A more complex example, showing 4 tasks which include loops:
-	
-	    cd sample01; for i in controls patients; do ./my_prog \$i; done
-	    cd sample02; for i in controls patients; do ./my_prog \$i; done
-	    cd sample03; for i in controls patients; do ./my_prog \$i; done
-	    cd sample04; for i in controls patients; do ./my_prog \$i; done
-	
-	Enabling verbose mode prints each command to stdout as it is
-	read from the command file.
-	
-	Limitations:
-	
-	* it writes the list of tasks to K files, where K is the value of
-	  of the SLURM_NTASKS environment variable. The tasks are written
-	  in a simple round-robin manner over the K files. This makes no
-	  provision for how quickly any individual task might execute
-	  compared to the others, and so an equal division of labour
-	  between the SLURM_NTASKS processors is not guaranteed at all.
-	
-	* it makes no decisions about memory usage per task. The
-	  assumption is that the user has already calculated memory
-	  consumption, and has used a combination of "#SBATCH -n <n>"
-	  and "#SBATCH -N <N>" to fit. For example, if the node has 8
-	  cores and 16 GB of RAM, then "#SBATCH -n 8" will spread the
-	  tasks over 8 cores on one machine, and will assume that the
-	  total memory usage is no more than 16GB (2GB per task). If you
-	  need 4GB per task, then instead you must use "#SBATCH -n 8"
-	  and "#SBATCH -N 2" in order to spread the 8 tasks
-	  over 2 nodes.
-	
-	* no output redirection is performed, so any stdout/stderr will
-	  be sent to the slurm-NNNNN.out file by default. This can
-	  be changed by adding individual redirects to each task.
-	  Care must be taken in that case so that the output files
-	  have unique names/paths.
-	
-	Note that this program will create a temporary directory
-	(called .taskfarm_job_\${SLURM_JOB_ID}) in which to store
-	the slurm multi-config files.
-	
+function die() {
+    local _ret=$2
+    test -n "$_ret" || _ret=1
+    test "$_PRINT_HELP" = yes && print_help >&2
+    echo "$1" >&2
+    exit ${_ret}
+}
+
+function begins_with_short_option() {
+    local first_option all_short_options
+    all_short_options='vh'
+    first_option="${1:0:1}"
+    test "$all_short_options" = "${all_short_options/$first_option/}" && return 1 || return 0
+}
+
+# THE DEFAULTS INITIALIZATION - POSITIONALS
+_positionals=()
+_arg_command=""
+_arg_threads=0
+
+# THE DEFAULTS INITIALIZATION - OPTIONALS
+_arg_verbose=off
+
+# DO NOT CHANGE THESE DEFAULTS ON MOGON (I or II)
+SCRATCHDIR="/localscratch/${SLRUM_JOB_ID}"
+TASKFILE=$SCRATCHDIR/taskfarm.txt
+
+print_help ()
+{
+    echo "The general script's help msg"
+    printf "Usage: $(basename $0) [-t|--threads <arg>] [--(no-)verbose] [-v|--version] [-h|--help] <comand> [path(s)]\n"
+    printf "\t%s\n" "<comand>: the command to be carried out in the task farm"
+    printf "\t%s\n" "-t,--threads: how many threads can 'command' sensibly use (default: '"0"')"
+    printf "\t%s\n" "--verbose,--no-verbose: Turn on verbose mode (off by default)"
+    printf "\t%s\n" "-v,--version: Prints version"
+    printf "\t%s\n" "-h,--help: Prints help"
+
+cat <<-EOM
+    
+    The <command_filename> must have one individual task per
+    line. The task can comprise of multiple bash shell commands,
+    each separated by a semi-colon (;).
+    
+    For example, the following shows 6 tasks:
+    
+        ./my_prog my_input01 > my_output01
+        ./my_prog my_input02 > my_output02
+        ./my_prog my_input03 > my_output03
+        ./my_prog my_input04 > my_output04
+        ./my_prog my_input05 > my_output05
+        ./my_prog my_input06 > my_output06
+    
+    A more complex example, showing 4 tasks which include loops:
+    
+        cd sample01; for i in controls patients; do ./my_prog \$i; done
+        cd sample02; for i in controls patients; do ./my_prog \$i; done
+        cd sample03; for i in controls patients; do ./my_prog \$i; done
+        cd sample04; for i in controls patients; do ./my_prog \$i; done
+    
+    Enabling verbose mode prints each command to stdout as it is
+    read from the command file.
+    
+    Limitations:
+    
+    * it writes the list of tasks to K files, where K is the value of
+      of the SLURM_NTASKS environment variable. The tasks are written
+      in a simple round-robin manner over the K files. This makes no
+      provision for how quickly any individual task might execute
+      compared to the others, and so an equal division of labour
+      between the SLURM_NTASKS processors is not guaranteed at all.
+    
+    * it makes no decisions about memory usage per task. The
+      assumption is that the user has already calculated memory
+      consumption, and has used a combination of "#SBATCH -n <n>"
+      and "#SBATCH -N <N>" to fit. For example, if the node has 8
+      cores and 16 GB of RAM, then "#SBATCH -n 8" will spread the
+      tasks over 8 cores on one machine, and will assume that the
+      total memory usage is no more than 16GB (2GB per task). If you
+      need 4GB per task, then instead you must use "#SBATCH -n 8"
+      and "#SBATCH -N 2" in order to spread the 8 tasks
+      over 2 nodes.
+    
+    * no output redirection is performed, so any stdout/stderr will
+      be sent to the slurm-NNNNN.out file by default. This can
+      be changed by adding individual redirects to each task.
+      Care must be taken in that case so that the output files
+      have unique names/paths.
+    
+    Note that this program will create a temporary directory
+    (called /localscratch/\${SLURM_JOB_ID}) in which to store
+    the slurm multi-config files.
 EOM
 }
 
-
-######################################################
-# Variables
-######################################################
-verbose=0
-command_filename=""
-# loop counter
-i=0
-
-
-######################################################
-# Parse options
-######################################################
-while getopts "vh" Option
-do
-	case "$Option" in
-		v) verbose="1";;
-		h) usage; exit;;
-		*) usage; exit;;
-	esac
+# THE PARSING ITSELF
+while test $# -gt 0; do
+    _key="$1"
+    case "$_key" in
+    -t*|--threads|--threads=*)
+        _val_from_long="${_key##--threads=}"
+        _val_from_short="${_key##-t}"
+        if [[ "$_val_from_long" != "$_key" ]]; then
+            _val="$_val_from_long"
+        elif [[ "$_val_from_short" != "$_key" && -n "$_val_from_short" ]]; then
+            _val="$_val_from_short"
+        else
+            test $# -lt 2 && die "Missing value for the optional argument '$_key'." 1
+                _val="$2"
+                shift
+        fi
+        _arg_threads="$_val"
+        ;;
+    --no-verbose|--verbose)
+        _arg_verbose="on"
+        test "${1:0:5}" = "--no-" && _arg_verbose="off"
+        ;;
+    -v*|--version)
+        echo "$(basename $0) v${VERSION}"
+        exit 0
+        ;;
+    -h*|--help)
+        print_help
+        exit 0
+        ;;
+    *)
+        _positionals+=("$1")
+        ;;
+    esac
+    shift
 done
-shift $(($OPTIND-1))
 
+_positional_names=('_arg_command' )
+_required_args_string="'command'"
+test ${#_positionals[@]} -lt 1 && _PRINT_HELP=yes die "FATAL ERROR: Not enough positional arguments - we require at least 1 (namely: $_required_args_string), but got only ${#_positionals[@]}." 1
+_our_args=$((${#_positionals[@]} - ${#_positional_names[@]}))
+for (( ii = 0; ii < $_our_args; ii++)); do
+    _positional_names+=("_arg_leftovers[(($ii + 0))]")
+done
+
+for (( ii = 0; ii < ${#_positionals[@]}; ii++)); do
+    eval "${_positional_names[ii]}=\${_positionals[ii]}" || die "Error during argument parsing, possibly an Argbash bug." 1
+done
 
 ######################################################
-# Check for command_filename
+# Sanity check: abort without input files or given tasks
 ######################################################
-if [ "$#" -eq "0" ]
-then
-	usage; exit 1
-else
-	command_filename=$1
+if [[ ${#_arg_leftovers[@]} -eq 0 && "x${SLRUM_NTAKS}" = "x" ]]; then
+    echo "$(basename $0): error: either --ntasks or input files have to be defined. Exiting."
+    exit 1
 fi
 
-
 ######################################################
-# Does the file exist?
+# Does the command file exist?
 ######################################################
-if [ ! -f "${command_filename}" ]
-then
-	echo "$(basename $0): error: commands file ${command_filename} does not exist. Exiting."
-	exit 1
+if [ ! -f "${_arg_command}" ]; then
+   echo "$(basename $0): error: commands file \"${_arg_command}\" does not exist. Exiting."
+   exit 1
 fi
-
 
 ######################################################
 # Check for slurm environment
 ######################################################
-if [ "x${SLURM_JOB_ID}" = "x" -o "x${SLURM_NTASKS}" = "x" ]
-then
-	echo "$(basename $0): error: must be executed from within a SLURM allocation. Exiting."
-	exit 1
+if [ -z "$SLURM_JOB_ID" ] ; then
+    echo "$(basename $0): error: must be executed from within a SLURM allocation. Exiting."
+    exit 1
 fi
 
-
-if [ "${verbose}" = "1" ]
-then
-	echo ""
-	echo "-------------------- $(basename $0) START --------------------"
-	echo "Reading commands from file: ${command_filename}."
-	echo "There are $(cat ${command_filename} | wc -l) lines in the file."
-	echo "They will be spread over the ${SLURM_NTASKS} processors:   ${SLURM_TASKS_PER_NODE} tasks on ${SLURM_NODELIST}"
-	#md5sum ${command_filename}
+if [[ "${verbose}" = "on" ]]; then
+    echo ""
+    echo "-------------------- $(basename $0) START --------------------"
+    echo "Reading commands from file: ${command_filename}."
+    echo "There are $(cat ${command_filename} | wc -l) lines in the file."
+    echo "They will be spread over the ${SLURM_NTASKS} processors:   ${SLURM_TASKS_PER_NODE} tasks on ${SLURM_NODELIST}"
 fi
-
-
-######################################################
-# Sanity check if old stale files exist
-######################################################
-if [ -d .taskfarm_job_${SLURM_JOB_ID} ]
-then
-	if [ "${verbose}" = "1" ]
-	then
-		echo "Deleting old job files .taskfarm_job_${SLURM_JOB_ID}_*.sh"
-	fi
-	rm -f .taskfarm_job_${SLURM_JOB_ID}_*.sh
-fi
-
 
 ######################################################
 # Create the taskfarm directory
 ######################################################
-if [ "${verbose}" = "1" ]
-then
-	echo "Creating taskfarm job directory .taskfarm_job_${SLURM_JOB_ID}"
+if [[ "${verbose}" = "on" ]]; then
+    echo "Creating taskfarm job directory ${TASKFARMDIR}"
 fi
-mkdir .taskfarm_job_${SLURM_JOB_ID}
-
+mkdir -p $TASKFARMDIR || { echo "$(basename $0): error: unable to create directory in jobdir on $(hostname). Exiting."; exit 1; }
 
 ######################################################
 # Warn if no output redirection
 ######################################################
-if [ "${verbose}" = "1" ] && ! grep -q '>' ${command_filename}
-then
-	echo ""
-	echo "WARNING: there is no individual task output redirection in the ${command_filename}"
-	echo "         file. This could potentially be a problem. Output of all individual"
-	echo "         tasks will likely be merged in the slurm output file ('slurm-${SLURM_JOB_ID}.out')."
-	echo ""
+if [[ "${verbose}" = "on" ]] && ! grep -q '>' ${_arg_command}; then
+    echo ""
+    echo "WARNING: there is no individual task output redirection in the ${command_filename}"
+    echo "         file. This could potentially be a problem. Output of all individual"
+    echo "         tasks will likely be merged in the slurm output file ('slurm-${SLURM_JOB_ID}.out')."
+    echo ""
 fi
-
 
 ######################################################
 # Main loop:
-# read the file, line by line, and create the
-# individual multi-prog shell scripts
+# individual multi-prog shell scripts depending on
+# input (tasks or file names)
 ######################################################
-while read line
-do
-	if [ "${verbose}" = "1" ]
-	then
-		echo "Adding the following line to .taskfarm_job_${SLURM_JOB_ID}/${i}.sh:     $line"
-	fi
+if [[ ${#_arg_leftovers[@]} -gt 0 ]]; then
+    iter=0
+    while [ $iter < $_our_args ]; do 
+        ######################################################
+        # Creating the taskfarm multiprog file
+        ######################################################
+        MULTIFILE=$(mktemp "${TASKFARMDIR}/multiconf_$iter.XXXXXX") || { echo "$(basename 0): error: Failed to create temp file"; exit 1; }
+        for (( i = 0; i < $SLRUM_NTASKS || $iter < $_our_args; i++ )); do
+            fname=${_arg_leftovers[$(($i + $iter))]}
+            iter=$(($iter + 1))
+            if [[ "${verbose}" = "on" ]]; then
+                echo "Adding the following file name to ${MULTIFILE} (if existing): $fname"
+            fi
 
-	# TODO: ignore blank lines
-
-	echo $line >> .taskfarm_job_${SLURM_JOB_ID}/${i}.sh
-
-	# increment, modulo the number of tasks
-	(( i = (i + 1) % ${SLURM_NTASKS} ))
-done < ${command_filename}
-
-
-######################################################
-# Create the multi-prog file (using the '%t' token)
-######################################################
-if [ "${verbose}" = "1" ]
-then
-	echo "Creating the .taskfarm_job_${SLURM_JOB_ID}/multi.config file."
+            # output only, if line not empty or does not start with '#'
+            [[ -e  $fname  ]] && echo "$i $_arg_command $fname" >> $MULTIFILE
+        done 
+        if [[ $_arg_threads -gt 0 ]]; then
+            export OMP_NUM_THREADS=$_arg_threads && srun --hint=multithread --cpu_bind=ldoms --cpus-per-task=$_arg_threads
+        else
+            srun --multi-prog $MULTIFILE
+        fi
+    done
+else
+   for (( item = 0; item < $SLRUM_NTASKS; item++)); do
+       echo "$_arg_command" >> $MULTIFILE
+   done
 fi
-echo "* bash .taskfarm_job_${SLURM_JOB_ID}/%t.sh" > .taskfarm_job_${SLURM_JOB_ID}/multi.config
 
-
-######################################################
-# And finally run the slurm multi-prog task file
-######################################################
-if [ "${verbose}" = "1" ]
-then
-	echo "About to execute 'srun --multi-prog .taskfarm_job_${SLURM_JOB_ID}/multi.config'."
-	echo "==================== $(basename $0) END ===================="
-	echo ""
-fi
-srun --multi-prog .taskfarm_job_${SLURM_JOB_ID}/multi.config
+echo "==================== $(basename $0) END ===================="
 
