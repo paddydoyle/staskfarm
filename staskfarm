@@ -196,14 +196,6 @@ if [[ "${verbose}" = "on" ]]; then
 fi
 
 ######################################################
-# Create the taskfarm directory
-######################################################
-if [[ "${verbose}" = "on" ]]; then
-    echo "Creating taskfarm job directory ${TASKFARMDIR}"
-fi
-mkdir -p $TASKFARMDIR || { echo "$(basename $0): ERROR: unable to create directory in jobdir on $(hostname). Exiting."; exit 1; }
-
-######################################################
 # Warn if no output redirection
 ######################################################
 if [[ "${verbose}" = "on" ]] && ! grep -q '>' ${_arg_command}; then
@@ -225,7 +217,7 @@ if [[ ${#_arg_leftovers[@]} -gt 0 ]]; then
         ######################################################
         # Creating the taskfarm multiprog file
         ######################################################
-        MULTIFILE=$(mktemp "${TASKFARMDIR}/multiconf_$iter.XXXXXX") || { echo "$(basename 0): ERROR: Failed to create temp file"; exit 1; }
+        MULTIFILE=$(mktemp "${SCRATCHDIR}/multiconf_$iter.XXXXXX") || { echo "$(basename 0): ERROR: Failed to create temp file"; exit 1; }
         for (( i = 0; i < $SLRUM_NTASKS || $iter < $_our_args; i++ )); do
             fname=${_arg_leftovers[$(($i + $iter))]}
             iter=$(($iter + 1))
