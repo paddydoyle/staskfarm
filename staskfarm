@@ -237,7 +237,8 @@ if [[ ${#_arg_leftovers[@]} -gt 0 ]]; then
             [[ -e  $fname  ]] && echo "$i $_arg_command $fname" >> $MULTIFILE
         done 
         if [[ $_arg_threads -gt 0 ]]; then
-            export OMP_NUM_THREADS=$_arg_threads && srun --hint=multithread --cpu_bind=ldoms --cpus-per-task=$_arg_threads
+            export OMP_NUM_THREADS=$_arg_threads && 
+                   srun --hint=multithread --cpu_bind=ldoms --cpus-per-task=$_arg_threads --multi-prog $MULTIFILE
         else
             srun --multi-prog $MULTIFILE
         fi
