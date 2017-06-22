@@ -45,7 +45,6 @@ _arg_verbose=off
 
 # DO NOT CHANGE THESE DEFAULTS ON MOGON (I or II)
 SCRATCHDIR="/localscratch/${SLRUM_JOB_ID}"
-TASKFILE=$SCRATCHDIR/taskfarm.txt
 
 print_help ()
 {
