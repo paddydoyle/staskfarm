@@ -167,7 +167,7 @@ done
 # Sanity check: abort without input files or given tasks
 ######################################################
 if [[ ${#_arg_leftovers[@]} -eq 0 && "x${SLRUM_NTAKS}" = "x" ]]; then
-    echo "$(basename $0): error: either --ntasks or input files have to be defined. Exiting."
+    echo "$(basename $0): ERROR: either --ntasks or input files have to be defined. Exiting."
     exit 1
 fi
 
@@ -175,7 +175,7 @@ fi
 # Does the command file exist?
 ######################################################
 if [ ! -f "${_arg_command}" ]; then
-   echo "$(basename $0): error: commands file \"${_arg_command}\" does not exist. Exiting."
+   echo "$(basename $0): ERROR: commands file \"${_arg_command}\" does not exist. Exiting."
    exit 1
 fi
 
@@ -183,7 +183,7 @@ fi
 # Check for slurm environment
 ######################################################
 if [ -z "$SLURM_JOB_ID" ] ; then
-    echo "$(basename $0): error: must be executed from within a SLURM allocation. Exiting."
+    echo "$(basename $0): ERROR: must be executed from within a SLURM allocation. Exiting."
     exit 1
 fi
 
@@ -201,7 +201,7 @@ fi
 if [[ "${verbose}" = "on" ]]; then
     echo "Creating taskfarm job directory ${TASKFARMDIR}"
 fi
-mkdir -p $TASKFARMDIR || { echo "$(basename $0): error: unable to create directory in jobdir on $(hostname). Exiting."; exit 1; }
+mkdir -p $TASKFARMDIR || { echo "$(basename $0): ERROR: unable to create directory in jobdir on $(hostname). Exiting."; exit 1; }
 
 ######################################################
 # Warn if no output redirection
@@ -225,7 +225,7 @@ if [[ ${#_arg_leftovers[@]} -gt 0 ]]; then
         ######################################################
         # Creating the taskfarm multiprog file
         ######################################################
-        MULTIFILE=$(mktemp "${TASKFARMDIR}/multiconf_$iter.XXXXXX") || { echo "$(basename 0): error: Failed to create temp file"; exit 1; }
+        MULTIFILE=$(mktemp "${TASKFARMDIR}/multiconf_$iter.XXXXXX") || { echo "$(basename 0): ERROR: Failed to create temp file"; exit 1; }
         for (( i = 0; i < $SLRUM_NTASKS || $iter < $_our_args; i++ )); do
             fname=${_arg_leftovers[$(($i + $iter))]}
             iter=$(($iter + 1))
