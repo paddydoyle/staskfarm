@@ -1,0 +1,22 @@
+# easyconfigfile for the ZDV taskfarm script
+name        = 'staskfarm'
+version     = '0.1'
+
+homepage    = 'https://github.com/cmeesters/staskfarm'
+description = 'script to simplify multi-prog scripts in slurm'
+
+toolchain   = {'name' : 'dummy', 'version' : 'dummy'}
+easyblock   = 'Binary'
+
+source_urls = ['https://github.com/cmeesters/staskfarm/blob/master/staskfarm']
+sources     = ['staskfarm']
+
+unpack_sources = False
+
+files_to_copy = ['staskfarm']
+
+moduleclass = 'tools'
+
+sanity_check_commands = ['bash -n']
+sanity_check_paths    = { 'files' : ['staskfarm'] ,
+                          'dirs'  : [],}
