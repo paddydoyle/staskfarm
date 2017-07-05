@@ -238,6 +238,7 @@ else
    for (( item = 0; item < $SLRUM_NTASKS; item++)); do
        echo "$_arg_command" >> $MULTIFILE
    done
+   srun --multi-prog $MULTIFILE
 fi
 
 echo "==================== $(basename $0) END ===================="
