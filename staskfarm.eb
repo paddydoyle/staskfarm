@@ -1,6 +1,6 @@
 # easyconfigfile for the ZDV taskfarm script
 name        = 'staskfarm'
-version     = '0.1'
+version     = '0.2'
 
 homepage    = 'https://github.com/cmeesters/staskfarm'
 description = 'script to simplify multi-prog scripts in slurm'
