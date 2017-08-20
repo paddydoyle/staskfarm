@@ -18,7 +18,7 @@
 #   which means updating two files if you wish to add or remove tasks
 #
 
-VERSION='0.0.1'
+VERSION='0.2.0'
 
 function die() {
     local _ret=$2
@@ -44,13 +44,13 @@ _arg_threads=0
 _arg_verbose=off
 
 # DO NOT CHANGE THESE DEFAULTS ON MOGON (I or II)
-SCRATCHDIR="/localscratch/${SLRUM_JOB_ID}"
+SCRATCHDIR="/localscratch/${SLURM_JOB_ID}"
 
 print_help ()
 {
     echo "The general script's help msg"
-    printf "Usage: $(basename $0) [-t|--threads <arg>] [--(no-)verbose] [-v|--version] [-h|--help] <comand> [path(s)]\n"
-    printf "\t%s\n" "<comand>: the command to be carried out in the task farm"
+    printf "Usage: $(basename $0) [-t|--threads <arg>] [--(no-)verbose] [-v|--version] [-h|--help] <command> [path(s)]\n"
+    printf "\t%s\n" "<command>: the command to be carried out in the task farm"
     printf "\t%s\n" "-t,--threads: how many threads can 'command' sensibly use (default: '"0"')"
     printf "\t%s\n" "--verbose,--no-verbose: Turn on verbose mode (off by default)"
     printf "\t%s\n" "-v,--version: Prints version"
@@ -173,7 +173,7 @@ fi
 ######################################################
 # Does the command file exist?
 ######################################################
-if [ ! -f "${_arg_command}" ]; then
+if [[ ! -f "${_arg_command}" && ! -z "$(command ${_arg_command})" ]]; then
    echo "$(basename $0): ERROR: commands file \"${_arg_command}\" does not exist. Exiting."
    exit 1
 fi
@@ -184,6 +184,19 @@ fi
 if [ -z "$SLURM_JOB_ID" ] ; then
     echo "$(basename $0): ERROR: must be executed from within a SLURM allocation. Exiting."
     exit 1
+fi
+
+declare -i LIMIT=1000000
+if [[ ! -z "$SLURM_NTASKS" ]]; then
+    LIMIT=$SLURM_NTASKS
+else
+   declare -i no_of_nodes=$(scontrol show hostname $SLURM_JOB_NODELIST | paste -d, -s | tr ',' ' ' | wc -w)
+
+   if [ $no_of_nodes -gt 1 ]; then
+      LIMIT=$(($SLURM_CPUS_ON_NODE * $no_of_nodes))
+   else
+      LIMIT=$SLURM_CPUS_ON_NODE
+   fi
 fi
 
 if [[ "${verbose}" = "on" ]]; then
@@ -212,21 +225,41 @@ fi
 ######################################################
 if [[ ${#_arg_leftovers[@]} -gt 0 ]]; then
     iter=0
-    while [ $iter < $_our_args ]; do 
+    while [ $iter -lt $_our_args ]; do 
         ######################################################
         # Creating the taskfarm multiprog file
         ######################################################
         MULTIFILE=$(mktemp "${SCRATCHDIR}/multiconf_$iter.XXXXXX") || { echo "$(basename 0): ERROR: Failed to create temp file"; exit 1; }
-        for (( i = 0; i < $SLRUM_NTASKS || $iter < $_our_args; i++ )); do
-            fname=${_arg_leftovers[$(($i + $iter))]}
+        for (( i = 0; i < $LIMIT && $iter < $_our_args; i++ )); do
+            #fname=${_arg_leftovers[$(($i + $iter))]}
+            fname=${_arg_leftovers[$iter]}
             iter=$(($iter + 1))
             if [[ "${verbose}" = "on" ]]; then
                 echo "Adding the following file name to ${MULTIFILE} (if existing): $fname"
             fi
+            echo "$i $iter $_arg_command $fname" 
 
             # output only, if line not empty or does not start with '#'
-            [[ -e  $fname  ]] && echo "$i $_arg_command $fname" >> $MULTIFILE
+            [[ -e $fname ]] && echo "$i $_arg_command $fname" >> $MULTIFILE
         done 
+        # is the multifile incomplete? (usually at remaining trunk)
+        set -x
+        declare -i no_of_lines=$(wc -l $MULTIFILE | cut -d ' ' -f1)
+        if [[ $no_of_lines -lt $LIMIT ]]; then
+            # produce a dummy file
+            dummy=$SCRATCHDIR/dummy.sh
+            echo "#!/bin/bash" > $dummy
+            echo "exit" >> $dummy
+            chmod +x $dummy
+            for ((i = $no_of_lines ; i < $((LIMIT)) ; i++)); do
+                echo "$i $dummy " >> $MULTIFILE
+            done
+            # this dummy file needs to be present on every node,
+            # as it is not part the env. as other scripts / apps.
+            sbcast -f $dummy $SCRATCHDIR/$(basename $dummy) 
+        fi
+        set +x
+        cp $MULTIFILE .
         if [[ $_arg_threads -gt 0 ]]; then
             export OMP_NUM_THREADS=$_arg_threads && 
                    srun --hint=multithread --cpu_bind=ldoms --cpus-per-task=$_arg_threads --multi-prog $MULTIFILE
@@ -238,7 +271,12 @@ else
    for (( item = 0; item < $SLRUM_NTASKS; item++)); do
        echo "$_arg_command" >> $MULTIFILE
    done
-   srun --multi-prog $MULTIFILE
+   if [[ $_arg_threads -gt 0 ]]; then
+       export OMP_NUM_THREADS=$_arg_threads && 
+              srun --hint=multithread --cpu_bind=ldoms --cpus-per-task=$_arg_threads --multi-prog $MULTIFILE
+   else
+       srun --multi-prog $MULTIFILE
+   fi
 fi
 
 echo "==================== $(basename $0) END ===================="
