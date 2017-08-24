@@ -2,6 +2,7 @@
 
 # adapted from https://github.com/paddydoyle/staskfarm
 # v1 2017/04/20 C.Meesters (ZDV)
+# v2 2017/08/18 - dummy commands introduced for tasknumbers != ntask
 # Simple taskfarm script for a Slurm environment.
 #
 # Purpose: take a file of tasks (one per line) and create slurm multi-prog
@@ -18,7 +19,7 @@
 #   which means updating two files if you wish to add or remove tasks
 #
 
-VERSION='0.2.0'
+VERSION='0.2.1'
 
 function die() {
     local _ret=$2
@@ -165,7 +166,7 @@ done
 ######################################################
 # Sanity check: abort without input files or given tasks
 ######################################################
-if [[ ${#_arg_leftovers[@]} -eq 0 && "x${SLRUM_NTAKS}" = "x" ]]; then
+if [[ ${#_arg_leftovers[@]} -eq 0 && "x${SLRUM_NTASKS}" = "x" ]]; then
     echo "$(basename $0): ERROR: either --ntasks or input files have to be defined. Exiting."
     exit 1
 fi
