@@ -132,7 +132,7 @@ while test $# -gt 0; do
         fi
         _arg_threads="$_val"
         ;;
-    --no-verbose|--verbose)
+    --verbose)
         _arg_verbose="on"
         test "${1:0:5}" = "--no-" && _arg_verbose="off"
         ;;
@@ -200,12 +200,13 @@ else
    fi
 fi
 
-if [[ "${verbose}" = "on" ]]; then
+if [[ "${_arg_verbose}" = "on" ]]; then
     echo ""
     echo "-------------------- $(basename $0) START --------------------"
-    echo "Reading commands from file: ${command_filename}."
-    echo "There are $(cat ${command_filename} | wc -l) lines in the file."
-    echo "They will be spread over the ${SLURM_NTASKS} processors:   ${SLURM_TASKS_PER_NODE} tasks on ${SLURM_NODELIST}"
+    echo "Reading commands from file: ${_arg_command} in \"$(pwd)\"."
+    echo "There are $(cat ${_arg_command} | wc -l) lines in the file."
+    echo "There are $_our_args files or parameters to process."
+    echo "The tasks will be spread over the ${SLURM_NTASKS} processors:   ${SLURM_TASKS_PER_NODE} tasks on ${SLURM_NODELIST}"
 fi
 
 ######################################################
@@ -215,7 +216,8 @@ if [[ "${verbose}" = "on" ]] && ! grep -q '>' ${_arg_command}; then
     echo ""
     echo "WARNING: there is no individual task output redirection in the ${command_filename}"
     echo "         file. This could potentially be a problem. Output of all individual"
-    echo "         tasks will likely be merged in the slurm output file ('slurm-${SLURM_JOB_ID}.out')."
+    echo "         tasks will likely be merged in the slurm output file ('slurm-${SLURM_JOB_ID}.out')"
+    echo "         or a different, self-specified, output file."
     echo ""
 fi
 
@@ -244,7 +246,6 @@ if [[ ${#_arg_leftovers[@]} -gt 0 ]]; then
             [[ -e $fname ]] && echo "$i $_arg_command $fname" >> $MULTIFILE
         done 
         # is the multifile incomplete? (usually at remaining trunk)
-        set -x
         declare -i no_of_lines=$(wc -l $MULTIFILE | cut -d ' ' -f1)
         if [[ $no_of_lines -lt $LIMIT ]]; then
             # produce a dummy file
@@ -259,11 +260,13 @@ if [[ ${#_arg_leftovers[@]} -gt 0 ]]; then
             # as it is not part the env. as other scripts / apps.
             sbcast -f $dummy $SCRATCHDIR/$(basename $dummy) 
         fi
-        set +x
-        cp $MULTIFILE .
         if [[ $_arg_threads -gt 0 ]]; then
+            # The 'export' statement is a security measure for
+            # applications which rely on it. Actually similar
+            # variables should be exported likewise. Suggestions
+            # are welcome.
             export OMP_NUM_THREADS=$_arg_threads && 
-                   srun --hint=multithread --cpu_bind=ldoms --cpus-per-task=$_arg_threads --multi-prog $MULTIFILE
+            srun --hint=multithread --cpu_bind=ldoms --cpus-per-task=$_arg_threads --multi-prog $MULTIFILE
         else
             srun --multi-prog $MULTIFILE
         fi
