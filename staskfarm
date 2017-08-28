@@ -39,10 +39,12 @@ function begins_with_short_option() {
 # THE DEFAULTS INITIALIZATION - POSITIONALS
 _positionals=()
 _arg_command=""
-_arg_threads=0
+declare -i _arg_threads=0
+declare -i _arg_delay=0
 
 # THE DEFAULTS INITIALIZATION - OPTIONALS
 _arg_verbose=off
+_arg_parameters=off
 
 # DO NOT CHANGE THESE DEFAULTS ON MOGON (I or II)
 SCRATCHDIR="/localscratch/${SLURM_JOB_ID}"
@@ -53,100 +55,120 @@ print_help ()
     printf "Usage: $(basename $0) [-t|--threads <arg>] [--(no-)verbose] [-v|--version] [-h|--help] <command> [path(s)]\n"
     printf "\t%s\n" "<command>: the command to be carried out in the task farm"
     printf "\t%s\n" "-t,--threads: how many threads can 'command' sensibly use (default: '"0"')"
+    printf "\t%s\n" "-d,--delay: arbitrary delay for all instances of the comman in seconds, (default: '"0"')"
+    printf "\t%s\n" "--parameters,--no-parameters: Instead of assuming file names, assume parameters (off by default)"
     printf "\t%s\n" "--verbose,--no-verbose: Turn on verbose mode (off by default)"
     printf "\t%s\n" "-v,--version: Prints version"
     printf "\t%s\n" "-h,--help: Prints help"
 
-cat <<-EOM
-    
+    cat <<-EOM
+
     The <command_filename> must have one individual task per
     line. The task can comprise of multiple bash shell commands,
     each separated by a semi-colon (;).
-    
+
     For example, the following shows 6 tasks:
-    
+
         ./my_prog my_input01 > my_output01
         ./my_prog my_input02 > my_output02
         ./my_prog my_input03 > my_output03
         ./my_prog my_input04 > my_output04
         ./my_prog my_input05 > my_output05
         ./my_prog my_input06 > my_output06
-    
-    A more complex example, showing 4 tasks which include loops:
-    
+
+        A more complex example, showing 4 tasks which include loops:
+
         cd sample01; for i in controls patients; do ./my_prog \$i; done
         cd sample02; for i in controls patients; do ./my_prog \$i; done
         cd sample03; for i in controls patients; do ./my_prog \$i; done
         cd sample04; for i in controls patients; do ./my_prog \$i; done
-    
-    Enabling verbose mode prints each command to stdout as it is
-    read from the command file.
-    
-    Limitations:
-    
-    * it writes the list of tasks to K files, where K is the value of
-      of the SLURM_NTASKS environment variable. The tasks are written
-      in a simple round-robin manner over the K files. This makes no
-      provision for how quickly any individual task might execute
-      compared to the others, and so an equal division of labour
-      between the SLURM_NTASKS processors is not guaranteed at all.
-    
-    * it makes no decisions about memory usage per task. The
-      assumption is that the user has already calculated memory
-      consumption, and has used a combination of "#SBATCH -n <n>"
-      and "#SBATCH -N <N>" to fit. For example, if the node has 8
-      cores and 16 GB of RAM, then "#SBATCH -n 8" will spread the
-      tasks over 8 cores on one machine, and will assume that the
-      total memory usage is no more than 16GB (2GB per task). If you
-      need 4GB per task, then instead you must use "#SBATCH -n 8"
-      and "#SBATCH -N 2" in order to spread the 8 tasks
-      over 2 nodes.
-    
-    * no output redirection is performed, so any stdout/stderr will
-      be sent to the slurm-NNNNN.out file by default. This can
-      be changed by adding individual redirects to each task.
-      Care must be taken in that case so that the output files
-      have unique names/paths.
-    
-    Note that this program will create a temporary directory
-    (called /localscratch/\${SLURM_JOB_ID}) in which to store
-    the slurm multi-config files.
-EOM
+
+        Enabling verbose mode prints each command to stdout as it is
+        read from the command file.
+
+        Limitations:
+
+        * it writes the list of tasks to K files, where K is the value of
+        of the SLURM_NTASKS environment variable. The tasks are written
+        in a simple round-robin manner over the K files. This makes no
+        provision for how quickly any individual task might execute
+        compared to the others, and so an equal division of labour
+        between the SLURM_NTASKS processors is not guaranteed at all.
+
+        * it makes no decisions about memory usage per task. The
+        assumption is that the user has already calculated memory
+        consumption, and has used a combination of "#SBATCH -n <n>"
+        and "#SBATCH -N <N>" to fit. For example, if the node has 8
+        cores and 16 GB of RAM, then "#SBATCH -n 8" will spread the
+        tasks over 8 cores on one machine, and will assume that the
+        total memory usage is no more than 16GB (2GB per task). If you
+        need 4GB per task, then instead you must use "#SBATCH -n 8"
+        and "#SBATCH -N 2" in order to spread the 8 tasks
+        over 2 nodes.
+
+        * no output redirection is performed, so any stdout/stderr will
+        be sent to the slurm-NNNNN.out file by default. This can
+        be changed by adding individual redirects to each task.
+        Care must be taken in that case so that the output files
+        have unique names/paths.
+
+        Note that this program will create a temporary directory
+        (called /localscratch/\${SLURM_JOB_ID}) in which to store
+        the slurm multi-config files.
+        EOM
 }
 
 # THE PARSING ITSELF
 while test $# -gt 0; do
     _key="$1"
     case "$_key" in
-    -t*|--threads|--threads=*)
-        _val_from_long="${_key##--threads=}"
-        _val_from_short="${_key##-t}"
-        if [[ "$_val_from_long" != "$_key" ]]; then
-            _val="$_val_from_long"
-        elif [[ "$_val_from_short" != "$_key" && -n "$_val_from_short" ]]; then
-            _val="$_val_from_short"
-        else
-            test $# -lt 2 && die "Missing value for the optional argument '$_key'." 1
+        -t*|--threads|--threads=*)
+            _val_from_long="${_key##--threads=}"
+            _val_from_short="${_key##-t}"
+            if [[ "$_val_from_long" != "$_key" ]]; then
+                _val="$_val_from_long"
+            elif [[ "$_val_from_short" != "$_key" && -n "$_val_from_short" ]]; then
+                _val="$_val_from_short"
+            else
+                test $# -lt 2 && die "Missing value for the optional argument '$_key'." 1
                 _val="$2"
                 shift
-        fi
-        _arg_threads="$_val"
-        ;;
-    --verbose)
-        _arg_verbose="on"
-        test "${1:0:5}" = "--no-" && _arg_verbose="off"
-        ;;
-    -v*|--version)
-        echo "$(basename $0) v${VERSION}"
-        exit 0
-        ;;
-    -h*|--help)
-        print_help
-        exit 0
-        ;;
-    *)
-        _positionals+=("$1")
-        ;;
+            fi
+            _arg_threads="$_val"
+            ;;
+        -d*|--delay=*)
+            _val_from_long="${_key##--delay=}"
+            _val_from_short="${_key##-d}"
+            if [[ "$_val_from_long" != "$_key" ]]; then
+                _val="$_val_from_long"
+            elif [[ "$_val_from_short" != "$_key" && -n "$_val_from_short" ]]; then
+                _val="$_val_from_short"
+            else
+                test $# -lt 2 && die "Missing value for the optional argument '$_key'." 1
+                _val="$2"
+                shift
+            fi
+            _arg_delay="$_val"
+            ;;
+        --parameters)
+            _arg_parameters="on"
+            test "${1:0:5}" = "--no-" && _arg_parameters="off"
+            ;;
+        --verbose)
+            _arg_verbose="on"
+            test "${1:0:5}" = "--no-" && _arg_verbose="off"
+            ;;
+        -v*|--version)
+            echo "$(basename $0) v${VERSION}"
+                exit 0
+            ;;
+        -h*|--help)
+            print_help
+            exit 0
+            ;;
+        *)
+            _positionals+=("$1")
+            ;;
     esac
     shift
 done
@@ -175,8 +197,8 @@ fi
 # Does the command file exist?
 ######################################################
 if [[ ! -f "${_arg_command}" && ! -z "$(command ${_arg_command})" ]]; then
-   echo "$(basename $0): ERROR: commands file \"${_arg_command}\" does not exist. Exiting."
-   exit 1
+    echo "$(basename $0): ERROR: commands file \"${_arg_command}\" does not exist. Exiting."
+    exit 1
 fi
 
 ######################################################
@@ -191,13 +213,13 @@ declare -i LIMIT=1000000
 if [[ ! -z "$SLURM_NTASKS" ]]; then
     LIMIT=$SLURM_NTASKS
 else
-   declare -i no_of_nodes=$(scontrol show hostname $SLURM_JOB_NODELIST | paste -d, -s | tr ',' ' ' | wc -w)
+    declare -i no_of_nodes=$(scontrol show hostname $SLURM_JOB_NODELIST | paste -d, -s | tr ',' ' ' | wc -w)
 
-   if [ $no_of_nodes -gt 1 ]; then
-      LIMIT=$(($SLURM_CPUS_ON_NODE * $no_of_nodes))
-   else
-      LIMIT=$SLURM_CPUS_ON_NODE
-   fi
+    if [ $no_of_nodes -gt 1 ]; then
+        LIMIT=$(($SLURM_CPUS_ON_NODE * $no_of_nodes))
+    else
+        LIMIT=$SLURM_CPUS_ON_NODE
+    fi
 fi
 
 if [[ "${_arg_verbose}" = "on" ]]; then
@@ -212,7 +234,7 @@ fi
 ######################################################
 # Warn if no output redirection
 ######################################################
-if [[ "${verbose}" = "on" ]] && ! grep -q '>' ${_arg_command}; then
+if [[ "${_arg_verbose}" = "on" ]] && ! grep -q '>' ${_arg_command}; then
     echo ""
     echo "WARNING: there is no individual task output redirection in the ${command_filename}"
     echo "         file. This could potentially be a problem. Output of all individual"
@@ -237,13 +259,15 @@ if [[ ${#_arg_leftovers[@]} -gt 0 ]]; then
             #fname=${_arg_leftovers[$(($i + $iter))]}
             fname=${_arg_leftovers[$iter]}
             iter=$(($iter + 1))
-            if [[ "${verbose}" = "on" ]]; then
+            if [[ "${_arg_verbose}" = "on" ]]; then
                 echo "Adding the following file name to ${MULTIFILE} (if existing): $fname"
             fi
-            echo "$i $iter $_arg_command $fname" 
+
+            # filter lines with hash marks as comment lines
+            [[ "$fname" = "\#*" ]] && continue 
 
             # output only, if line not empty or does not start with '#'
-            [[ -e $fname ]] && echo "$i $_arg_command $fname" >> $MULTIFILE
+            [[ -e $fname || ${_arg_parameters} = "on" ]] && echo "$i $_arg_command $fname" >> $MULTIFILE
         done 
         # is the multifile incomplete? (usually at remaining trunk)
         declare -i no_of_lines=$(wc -l $MULTIFILE | cut -d ' ' -f1)
