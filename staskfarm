@@ -40,11 +40,11 @@ function begins_with_short_option() {
 _positionals=()
 _arg_command=""
 declare -i _arg_threads=0
-declare -i _arg_delay=0
 
 # THE DEFAULTS INITIALIZATION - OPTIONALS
 _arg_verbose=off
 _arg_parameters=off
+_arg_delay=0
 
 # DO NOT CHANGE THESE DEFAULTS ON MOGON (I or II)
 SCRATCHDIR="/localscratch/${SLURM_JOB_ID}"
@@ -55,10 +55,10 @@ print_help ()
     printf "Usage: $(basename $0) [-t|--threads <arg>] [--(no-)verbose] [-v|--version] [-h|--help] <command> [path(s)]\n"
     printf "\t%s\n" "<command>: the command to be carried out in the task farm"
     printf "\t%s\n" "-t,--threads: how many threads can 'command' sensibly use (default: '"0"')"
-    printf "\t%s\n" "-d,--delay: arbitrary delay for all instances of the comman in seconds, (default: '"0"')"
+    printf "\t%s\n" "-d,--delay: delay for all instances of the command in seconds, increases by 0.1 per job step (off by default)"
     printf "\t%s\n" "--parameters,--no-parameters: Instead of assuming file names, assume parameters (off by default)"
-    printf "\t%s\n" "--verbose,--no-verbose: Turn on verbose mode (off by default)"
-    printf "\t%s\n" "-v,--version: Prints version"
+    printf "\t%s\n" "-v,--verbose,--no-verbose: Turn on verbose mode (off by default)"
+    printf "\t%s\n" "--version: Prints version"
     printf "\t%s\n" "-h,--help: Prints help"
 
     cat <<-EOM
@@ -115,7 +115,7 @@ print_help ()
         Note that this program will create a temporary directory
         (called /localscratch/\${SLURM_JOB_ID}) in which to store
         the slurm multi-config files.
-        EOM
+EOM
 }
 
 # THE PARSING ITSELF
@@ -137,28 +137,18 @@ while test $# -gt 0; do
             _arg_threads="$_val"
             ;;
         -d*|--delay=*)
-            _val_from_long="${_key##--delay=}"
-            _val_from_short="${_key##-d}"
-            if [[ "$_val_from_long" != "$_key" ]]; then
-                _val="$_val_from_long"
-            elif [[ "$_val_from_short" != "$_key" && -n "$_val_from_short" ]]; then
-                _val="$_val_from_short"
-            else
-                test $# -lt 2 && die "Missing value for the optional argument '$_key'." 1
-                _val="$2"
-                shift
-            fi
-            _arg_delay="$_val"
+            _arg_delay="$on"
+            test "${1:0:5}" = "--no-" && _arg_delay="off"
             ;;
         --parameters)
             _arg_parameters="on"
             test "${1:0:5}" = "--no-" && _arg_parameters="off"
             ;;
-        --verbose)
+        -v*|--verbose)
             _arg_verbose="on"
             test "${1:0:5}" = "--no-" && _arg_verbose="off"
             ;;
-        -v*|--version)
+        --version)
             echo "$(basename $0) v${VERSION}"
                 exit 0
             ;;
@@ -244,6 +234,16 @@ if [[ "${_arg_verbose}" = "on" ]] && ! grep -q '>' ${_arg_command}; then
 fi
 
 ######################################################
+# Insert delay for each command
+######################################################
+if [[ "${_arg_verbose}" = "on" && "${_arg_delay}" = "on" ]]; then
+    echo ""
+    echo "Inserting delay to script:"
+    echo "0 for job step 0"
+    echo "0.1 for job step 1, etc."
+fi
+
+######################################################
 # Main loop:
 # individual multi-prog shell scripts depending on
 # input (tasks or file names)
@@ -260,14 +260,21 @@ if [[ ${#_arg_leftovers[@]} -gt 0 ]]; then
             fname=${_arg_leftovers[$iter]}
             iter=$(($iter + 1))
             if [[ "${_arg_verbose}" = "on" ]]; then
-                echo "Adding the following file name to ${MULTIFILE} (if existing): $fname"
+                echo "Adding the following file name or parameter list to ${MULTIFILE} (if existing): $fname"
             fi
 
             # filter lines with hash marks as comment lines
             [[ "$fname" = "\#*" ]] && continue 
 
+            # if delay is requested insert it
+            if [[ "${_arg_delay}" = "on" ]]; then
+                command=\"sleep $(echo "0.1 * $i" | bc -l) && ${_arg_command}\"
+            else
+                command=$_arg_command
+            fi
+
             # output only, if line not empty or does not start with '#'
-            [[ -e $fname || ${_arg_parameters} = "on" ]] && echo "$i $_arg_command $fname" >> $MULTIFILE
+            [[ -e $fname || ${_arg_parameters} = "on" ]] && echo "$i $command $fname" >> $MULTIFILE
         done 
         # is the multifile incomplete? (usually at remaining trunk)
         declare -i no_of_lines=$(wc -l $MULTIFILE | cut -d ' ' -f1)
