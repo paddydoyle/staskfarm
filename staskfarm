@@ -19,7 +19,7 @@
 #   which means updating two files if you wish to add or remove tasks
 #
 
-VERSION='0.2.1'
+VERSION='0.3'
 
 function die() {
     local _ret=$2
@@ -97,6 +97,13 @@ print_help ()
 
         Enabling verbose mode prints each command to stdout as it is
         read from the command file.
+
+        Hints:
+        - the -d/--delay option is useful e.g. for applications which 
+          access shared memory and there has to be one first instance.
+          The STAR aligner for instance crashes, when all applications
+          are started simultaniously, because there is no single instance
+          which can get a lock on the shared memory.
 
         Limitations:
 
