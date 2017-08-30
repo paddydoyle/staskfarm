@@ -46,8 +46,20 @@ _arg_verbose=off
 _arg_parameters=off
 _arg_delay=0
 
-# DO NOT CHANGE THESE DEFAULTS ON MOGON (I or II)
-SCRATCHDIR="/localscratch/${SLURM_JOB_ID}"
+# sourcing the configuration file
+BASEDIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+source ${BASEDIR}/staskfarm.cfg
+
+if [ ! -d $SCRATCHDIR ]; then
+    ( >&2 
+    echo "STASKFARM ERROR: Unable to discover \'$SCRATCHDIR\'!"
+    echo "       This indicates either"
+    echo "       a) a setup problem on your cluster or"
+    echo "       b) a faulty configuration of the staskfarm module."
+    echo "Please check \'${BASEDIR}\'/staskfarm.cfg\' ."
+    )
+    exit 1
+fi
 
 print_help ()
 {
