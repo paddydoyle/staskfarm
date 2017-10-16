@@ -84,8 +84,11 @@ EOM
 ######################################################
 verbose=0
 command_filename=""
+# no-op dummy command, for when ncommands < SLURM_NTASKS
+dummy_command=true
 # loop counter
 i=0
+ncommands=0
 
 
 ######################################################
@@ -187,18 +190,52 @@ fi
 ######################################################
 while read line
 do
+	# ignore blank lines and comment lines
+	if [[ $line =~ ^[[:blank:]]*# || $line =~ ^[[:blank:]]*$ ]]
+	then
+		if [ "${verbose}" = "1" ]
+		then
+			echo "Skipping blank and comment lines"
+		fi
+		continue
+	fi
+
 	if [ "${verbose}" = "1" ]
 	then
 		echo "Adding the following line to .taskfarm_job_${SLURM_JOB_ID}/${i}.sh:     $line"
 	fi
 
-	# TODO: ignore blank lines
-
 	echo $line >> .taskfarm_job_${SLURM_JOB_ID}/${i}.sh
 
 	# increment, modulo the number of tasks
 	(( i = (i + 1) % ${SLURM_NTASKS} ))
+
+	# increment the total number of commands
+	(( ncommands++ ))
 done < ${command_filename}
+
+
+######################################################
+# Sanity check: if the number of commands is less
+# than SLURM_NTASKS, then it the srun --multi-prog
+# will error. Add dummy tasks to fill them out.
+######################################################
+
+while (( ${ncommands} < ${SLURM_NTASKS} ))
+do
+	if [ "${verbose}" = "1" ]
+	then
+		echo "Adding the dummy command to .taskfarm_job_${SLURM_JOB_ID}/${i}.sh:     $line"
+	fi
+
+	echo "${dummy_command}" >> .taskfarm_job_${SLURM_JOB_ID}/${i}.sh
+
+	# increment (don't need the modulo here, the loop guard takes care of it)
+	(( i++ ))
+
+	# increment the total number of commands
+	(( ncommands++ ))
+done
 
 
 ######################################################
