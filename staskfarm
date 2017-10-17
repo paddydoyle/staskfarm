@@ -258,6 +258,10 @@ else
 
 	command=$1
 
+	# the first positional arg is the 'command' variable, which we've saved above.
+	# remove it from the list
+	shift
+
 	######################################################
 	# Does the file exist?
 	######################################################
@@ -296,10 +300,6 @@ else
 	# loop over the parameters, and create the
 	# individual multi-prog shell scripts
 	######################################################
-
-	# the first positional arg is the 'command' variable, which we've saved above
-	# remove it from the list
-	shift
 
 	# just in case of quoted parameters (e.g. filenames with spaces)
 	SAVEIFS=$IFS
