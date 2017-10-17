@@ -85,7 +85,7 @@ EOM
 verbose=0
 command_filename=""
 # no-op dummy command, for when ncommands < SLURM_NTASKS
-dummy_command=true
+dummy_command=/bin/true
 # loop counter
 i=0
 ncommands=0
