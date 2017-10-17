@@ -303,13 +303,8 @@ if [[ ${#_arg_leftovers[@]} -gt 0 ]]; then
             echo "         commands or parameters is given to keep the"
             echo "         requested number of tasks busy. Please review"
             echo "         your parallelization scheme."
-            # produce a dummy file
-            dummy=$SCRATCHDIR/dummy.sh
-            echo "#!/bin/bash" > $dummy
-            echo "exit" >> $dummy
-            chmod +x $dummy
             for ((i = $no_of_lines ; i < $LIMIT ; i++)); do
-                echo "$i $dummy " >> $MULTIFILE
+                echo "$i /bin/true" >> $MULTIFILE
             done
             # this dummy file needs to be present on every node,
             # as it is not part of the env. as other scripts / apps.
