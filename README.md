@@ -6,6 +6,8 @@ Simple taskfarm script for a Slurm environment.
 
 Take a file of tasks (one per line) and create slurm multi-prog
 config to execute those tasks. Each task can comprise of multiple commands.
+Alternatively provide a single command and parameter list, and create a slurm
+multi-prog config to execute them (this mode inspired by a fork by cmeesters).
 
 For Slurm partitions with `OverSubscribe=Yes` (formerly `Shared=Yes`),
 **Job Arrays** are a better solution for submitting multiple tasks. However, with
@@ -31,6 +33,11 @@ the `OverSubscribe=Exclusive` option is set on the partition.
 ## Usage
 
 Usage: `staskfarm [-v] command\_filename`
+  or:  `staskfarm [-v] command param [param]...`
+
+### staskfarm [-v] command\_filename
+
+In the first mode of operation: `staskfarm [-v] command\_filename`
 
 The `<command_filename>` must have one individual task per
 line. The task can comprise of multiple bash shell commands,
@@ -53,7 +60,23 @@ In particular, set the `#SBATCH -n` and `#SBATCH -N` parameters to match
 the number of nodes and/or cores that you need; `#SBATCH -n` will define
 the maximum number of simultaneous tasks that will be executed..
 
+### staskfarm [-v] command param [param]...
+
+In the second mode of operation: `staskfarm [-v] command param [param]...`
+
+The `<command>` is combined with each of the individual `<param>` parameters to
+generate the list of tasks to be executed. The number of tasks will be equal
+to the number of `<param>` values.
+
+The `<param>` values can either be a simple list (e.g. `input1 input2...`),
+or a shell glob (e.g. `*.inp`).
+
+Note that no output redirection is performed in this mode.
+
+
 ## Examples
+
+### staskfarm [-v] command\_filename
 
 For example, the following `commands.txt` example shows 6 tasks:
 
@@ -94,6 +117,38 @@ A more complex sample `commands.txt`, showing 4 tasks which include loops:
 
 Enabling verbose mode prints each command to stdout as it is
 read from the command file.
+
+### staskfarm [-v] command param [param]...
+
+When providing a list of parameters:
+
+    #!/bin/sh
+    #SBATCH -n 4
+    #SBATCH -N 2
+    #SBATCH -t 00:30:00     # 1 day and 3 hours
+    #SBATCH -p debug        # partition name
+    #SBATCH -J my\_job\_name  # sensible name for the job
+    
+    # add the staskfarm script to your PATH if necessary
+    # run the script, optionally in verbose mode
+    staskfarm -v ./my_prog my_input01 my_input02 my_input03 my_input04 my_input05 my_input06
+
+When providing a shell glob of filenames:
+
+    #!/bin/sh
+    #SBATCH -n 4
+    #SBATCH -N 2
+    #SBATCH -t 00:30:00     # 1 day and 3 hours
+    #SBATCH -p debug        # partition name
+    #SBATCH -J my\_job\_name  # sensible name for the job
+    
+    # add the staskfarm script to your PATH if necessary
+    # run the script, optionally in verbose mode
+    staskfarm -v ./my_prog *.inp
+
+As above, set the `#SBATCH -n` and `#SBATCH -N` parameters to match
+the number of nodes and/or cores that you need; `#SBATCH -n` will define
+the maximum number of simultaneous tasks that will be executed..
 
 ## Limitations
 
