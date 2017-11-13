@@ -197,7 +197,7 @@ done
 ######################################################
 # Sanity check: abort without input files or given tasks
 ######################################################
-if [[ ${#_arg_leftovers[@]} -eq 0 && "x${SLRUM_NTASKS}" = "x" ]]; then
+if [[ ${#_arg_leftovers[@]} -eq 0 && "x${SLURM_NTASKS}" = "x" ]]; then
     echo "$(basename $0): ERROR: either --ntasks or input files have to be defined. Exiting."
     exit 1
 fi
@@ -322,7 +322,7 @@ if [[ ${#_arg_leftovers[@]} -gt 0 ]]; then
         fi
     done
 else
-   for (( item = 0; item < $SLRUM_NTASKS; item++)); do
+   for (( item = 0; item < $SLURM_NTASKS; item++)); do
        echo "$_arg_command" >> $MULTIFILE
    done
    if [[ $_arg_threads -gt 0 ]]; then
