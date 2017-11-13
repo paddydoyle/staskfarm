@@ -1,8 +1,9 @@
 #!/bin/bash
 
 # adapted from https://github.com/paddydoyle/staskfarm
-# v1 2017/04/20 C.Meesters (ZDV)
-# v2 2017/08/18 - dummy commands introduced for tasknumbers != ntask
+# v0.1            Paddy Doyle
+# v0.2 2017/04/20 C.Meesters (ZDV)
+# v0.3 2017/08/18 C.Meesters - dummy commands introduced for tasknumbers != ntask
 # Simple taskfarm script for a Slurm environment.
 #
 # Purpose: take a file of tasks (one per line) and create slurm multi-prog
@@ -298,16 +299,15 @@ if [[ ${#_arg_leftovers[@]} -gt 0 ]]; then
         # is the multifile incomplete? (usually at remaining trunk)
         declare -i no_of_lines=$(wc -l $MULTIFILE | cut -d ' ' -f1)
         if [[ $no_of_lines -lt $LIMIT ]]; then
-            # produce a dummy file
-            dummy=$SCRATCHDIR/dummy.sh
-            echo "#!/bin/bash" > $dummy
-            echo "exit" >> $dummy
-            chmod +x $dummy
-            for ((i = $no_of_lines ; i < $((LIMIT)) ; i++)); do
-                echo "$i $dummy " >> $MULTIFILE
+            echo "WARNING: issuing dummy commands as insufficient number of"
+            echo "         commands or parameters is given to keep the"
+            echo "         requested number of tasks busy. Please review"
+            echo "         your parallelization scheme."
+            for ((i = $no_of_lines ; i < $LIMIT ; i++)); do
+                echo "$i /bin/true" >> $MULTIFILE
             done
             # this dummy file needs to be present on every node,
-            # as it is not part the env. as other scripts / apps.
+            # as it is not part of the env. as other scripts / apps.
             sbcast -f $dummy $SCRATCHDIR/$(basename $dummy) 
         fi
         if [[ $_arg_threads -gt 0 ]]; then
@@ -327,7 +327,7 @@ else
    done
    if [[ $_arg_threads -gt 0 ]]; then
        export OMP_NUM_THREADS=$_arg_threads && 
-              srun --hint=multithread --cpu_bind=ldoms --cpus-per-task=$_arg_threads --multi-prog $MULTIFILE
+       srun --hint=multithread --cpu_bind=ldoms --cpus-per-task=$_arg_threads --multi-prog $MULTIFILE
    else
        srun --multi-prog $MULTIFILE
    fi
