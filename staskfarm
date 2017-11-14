@@ -268,13 +268,13 @@ fi
 # individual multi-prog shell scripts depending on
 # input (tasks or file names)
 ######################################################
+MULTIFILE=$(mktemp "${SCRATCHDIR}/multiconf_$iter.XXXXXX") || { echo "$(basename 0): ERROR: Failed to create temp file"; exit 1; }
 if [[ ${#_arg_leftovers[@]} -gt 0 ]]; then
     iter=0
     while [ $iter -lt $_our_args ]; do 
         ######################################################
         # Creating the taskfarm multiprog file
         ######################################################
-        MULTIFILE=$(mktemp "${SCRATCHDIR}/multiconf_$iter.XXXXXX") || { echo "$(basename 0): ERROR: Failed to create temp file"; exit 1; }
         for (( i = 0; i < $LIMIT && $iter < $_our_args; i++ )); do
             #fname=${_arg_leftovers[$(($i + $iter))]}
             fname=${_arg_leftovers[$iter]}
@@ -322,15 +322,15 @@ if [[ ${#_arg_leftovers[@]} -gt 0 ]]; then
         fi
     done
 else
-   for (( item = 0; item < $SLURM_NTASKS; item++)); do
-       echo "$_arg_command" >> $MULTIFILE
-   done
-   if [[ $_arg_threads -gt 0 ]]; then
-       export OMP_NUM_THREADS=$_arg_threads && 
-       srun --hint=multithread --cpu_bind=ldoms --cpus-per-task=$_arg_threads --multi-prog $MULTIFILE
-   else
-       srun --multi-prog $MULTIFILE
-   fi
+    for (( item = 0; item < $SLURM_NTASKS; item++)); do
+        echo "$item $_arg_command" >> $MULTIFILE
+    done
+    if [[ $_arg_threads -gt 0 ]]; then
+        export OMP_NUM_THREADS=$_arg_threads && 
+        srun --hint=multithread --cpu_bind=ldoms --cpus-per-task=$_arg_threads --multi-prog $MULTIFILE
+    else
+        srun --multi-prog $MULTIFILE
+    fi
 fi
 
 echo "==================== $(basename $0) END ===================="
