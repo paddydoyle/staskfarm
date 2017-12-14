@@ -306,9 +306,6 @@ if [[ ${#_arg_leftovers[@]} -gt 0 ]]; then
             for ((i = $no_of_lines ; i < $LIMIT ; i++)); do
                 echo "$i /bin/true" >> $MULTIFILE
             done
-            # this dummy file needs to be present on every node,
-            # as it is not part of the env. as other scripts / apps.
-            sbcast -f $dummy $SCRATCHDIR/$(basename $dummy) 
         fi
         if [[ $_arg_threads -gt 0 ]]; then
             # The 'export' statement is a security measure for
