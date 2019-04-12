@@ -27,10 +27,10 @@
 
 function usage {
 	cat <<-EOM
-	Usage: $(basename $0) [-v] command_filename
-	  or:  $(basename $0) [-v] command param [param]...
+	Usage: $(basename "$0") [-v] command_filename
+	  or:  $(basename "$0") [-v] command param [param]...
 	
-	In the first mode of operation: $(basename $0) [-v] command_filename
+	In the first mode of operation: $(basename "$0") [-v] command_filename
 	
 	The <command_filename> must have one individual task per
 	line. The task can comprise of multiple bash shell commands,
@@ -55,7 +55,7 @@ function usage {
 	Enabling verbose mode prints each command to stdout as it is
 	read from the command file.
 	
-	In the second mode of operation: $(basename $0) [-v] command param [param]...
+	In the second mode of operation: $(basename "$0") [-v] command param [param]...
 	
 	The <command> is combined with each of the individual <param> parameters to
 	generate the list of tasks to be executed. The number of tasks will be equal
@@ -124,7 +124,7 @@ do
 		*) usage; exit;;
 	esac
 done
-shift $(($OPTIND-1))
+shift $((OPTIND-1))
 
 
 ######################################################
@@ -141,7 +141,7 @@ fi
 ######################################################
 if [ "x${SLURM_JOB_ID}" = "x" -o "x${SLURM_NTASKS}" = "x" ]
 then
-	echo "$(basename $0): error: must be executed from within a SLURM allocation. Exiting."
+	echo "$(basename "$0"): error: must be executed from within a SLURM allocation. Exiting."
 	exit 1
 fi
 
@@ -149,13 +149,13 @@ fi
 ######################################################
 # Sanity check if old stale files exist
 ######################################################
-if [ -d .taskfarm_job_${SLURM_JOB_ID} ]
+if [ -d ".taskfarm_job_${SLURM_JOB_ID}" ]
 then
 	if [ "${verbose}" = "1" ]
 	then
 		echo "Deleting old job files .taskfarm_job_${SLURM_JOB_ID}_*.sh"
 	fi
-	rm -f .taskfarm_job_${SLURM_JOB_ID}_*.sh
+	rm -f .taskfarm_job_"${SLURM_JOB_ID}"_*.sh
 fi
 
 
@@ -166,7 +166,7 @@ if [ "${verbose}" = "1" ]
 then
 	echo "Creating taskfarm job directory .taskfarm_job_${SLURM_JOB_ID}"
 fi
-mkdir .taskfarm_job_${SLURM_JOB_ID}
+mkdir ".taskfarm_job_${SLURM_JOB_ID}"
 
 
 ######################################################
@@ -191,7 +191,7 @@ then
 	######################################################
 	if [ ! -f "${command_filename}" ]
 	then
-		echo "$(basename $0): error: commands file ${command_filename} does not exist. Exiting."
+		echo "$(basename "$0"): error: commands file ${command_filename} does not exist. Exiting."
 		exit 1
 	fi
 
@@ -199,9 +199,9 @@ then
 	if [ "${verbose}" = "1" ]
 	then
 		echo ""
-		echo "-------------------- $(basename $0) START --------------------"
+		echo "-------------------- $(basename "$0") START --------------------"
 		echo "Reading commands from file: ${command_filename}."
-		echo "There are $(cat ${command_filename} | wc -l) lines in the file."
+		echo "There are $(wc -l < "${command_filename}") lines in the file."
 		echo "They will be spread over the ${SLURM_NTASKS} processors:   ${SLURM_TASKS_PER_NODE} tasks on ${SLURM_NODELIST}"
 		#md5sum ${command_filename}
 	fi
@@ -210,7 +210,7 @@ then
 	######################################################
 	# Warn if no output redirection
 	######################################################
-	if [ "${verbose}" = "1" ] && ! grep -q '>' ${command_filename}
+	if [ "${verbose}" = "1" ] && ! grep -q '>' "${command_filename}"
 	then
 		echo ""
 		echo "WARNING: there is no individual task output redirection in the ${command_filename}"
@@ -242,14 +242,14 @@ then
 			echo "Adding the following line to .taskfarm_job_${SLURM_JOB_ID}/${i}.sh:     $line"
 		fi
 
-		echo $line >> .taskfarm_job_${SLURM_JOB_ID}/${i}.sh
+		echo "$line" >> ".taskfarm_job_${SLURM_JOB_ID}/${i}.sh"
 
 		# increment, modulo the number of tasks
-		(( i = (i + 1) % ${SLURM_NTASKS} ))
+		(( i = (i + 1) % SLURM_NTASKS ))
 
 		# increment the total number of commands
 		(( ncommands++ ))
-	done < ${command_filename}
+	done < "${command_filename}"
 
 else
 	######################################################
@@ -267,7 +267,7 @@ else
 	######################################################
 	if [ ! "which ${command}" ]
 	then
-		echo "$(basename $0): error: taskfarm command ${command} does not exist. Exiting."
+		echo "$(basename "$0"): error: taskfarm command ${command} does not exist. Exiting."
 		exit 1
 	fi
 
@@ -275,7 +275,7 @@ else
 	if [ "${verbose}" = "1" ]
 	then
 		echo ""
-		echo "-------------------- $(basename $0) START --------------------"
+		echo "-------------------- $(basename "$0") START --------------------"
 		echo "Using command: ${command} with $# parameters."
 		echo "They will be spread over the ${SLURM_NTASKS} processors:   ${SLURM_TASKS_PER_NODE} tasks on ${SLURM_NODELIST}"
 		#md5sum ${command_filename}
@@ -305,7 +305,7 @@ else
 	SAVEIFS=$IFS
 	IFS=$(echo -en "\n\b")
 
-	for param in $*
+	for param in "$@"
 	do
 		line="${command} ${param}"
 
@@ -314,10 +314,10 @@ else
 			echo "Adding the following line to .taskfarm_job_${SLURM_JOB_ID}/${i}.sh:     $line"
 		fi
 
-		echo $line >> .taskfarm_job_${SLURM_JOB_ID}/${i}.sh
+		echo "$line" >> ".taskfarm_job_${SLURM_JOB_ID}/${i}.sh"
 
 		# increment, modulo the number of tasks
-		(( i = (i + 1) % ${SLURM_NTASKS} ))
+		(( i = (i + 1) % SLURM_NTASKS ))
 
 		# increment the total number of commands
 		(( ncommands++ ))
@@ -332,14 +332,14 @@ fi
 # will error. Add dummy tasks to fill them out.
 ######################################################
 
-while (( ${ncommands} < ${SLURM_NTASKS} ))
+while (( ncommands < SLURM_NTASKS ))
 do
 	if [ "${verbose}" = "1" ]
 	then
 		echo "Adding the dummy command to .taskfarm_job_${SLURM_JOB_ID}/${i}.sh:     ${dummy_command}"
 	fi
 
-	echo "${dummy_command}" >> .taskfarm_job_${SLURM_JOB_ID}/${i}.sh
+	echo "${dummy_command}" >> ".taskfarm_job_${SLURM_JOB_ID}/${i}.sh"
 
 	# increment (don't need the modulo here, the loop guard takes care of it)
 	(( i++ ))
@@ -356,7 +356,7 @@ if [ "${verbose}" = "1" ]
 then
 	echo "Creating the .taskfarm_job_${SLURM_JOB_ID}/multi.config file."
 fi
-echo "* bash .taskfarm_job_${SLURM_JOB_ID}/%t.sh" > .taskfarm_job_${SLURM_JOB_ID}/multi.config
+echo "* bash .taskfarm_job_${SLURM_JOB_ID}/%t.sh" > ".taskfarm_job_${SLURM_JOB_ID}/multi.config"
 
 
 ######################################################
@@ -365,8 +365,8 @@ echo "* bash .taskfarm_job_${SLURM_JOB_ID}/%t.sh" > .taskfarm_job_${SLURM_JOB_ID
 if [ "${verbose}" = "1" ]
 then
 	echo "About to execute 'srun --multi-prog .taskfarm_job_${SLURM_JOB_ID}/multi.config'."
-	echo "==================== $(basename $0) END ===================="
+	echo "==================== $(basename "$0") END ===================="
 	echo ""
 fi
-srun --multi-prog .taskfarm_job_${SLURM_JOB_ID}/multi.config
+srun --multi-prog ".taskfarm_job_${SLURM_JOB_ID}/multi.config"
 
