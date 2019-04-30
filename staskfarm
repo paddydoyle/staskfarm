@@ -153,9 +153,9 @@ if [ -d ".taskfarm_job_${SLURM_JOB_ID}" ]
 then
 	if [ "${verbose}" = "1" ]
 	then
-		echo "Deleting old job files .taskfarm_job_${SLURM_JOB_ID}_*.sh"
+		echo "Deleting old job files .taskfarm_job_${SLURM_JOB_ID}/*.sh"
 	fi
-	rm -f .taskfarm_job_"${SLURM_JOB_ID}"_*.sh
+	rm -f .taskfarm_job_"${SLURM_JOB_ID}"/*.sh
 fi
 
 
