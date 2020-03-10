@@ -152,6 +152,9 @@ the maximum number of simultaneous tasks that will be executed..
 
 ## Limitations
 
+* the use of MPI is not supported in the tasks. Only serial tasks
+  can appear in the task lists.
+
 * it writes the list of tasks to K files, where K is the value of
   of the `SLURM\_NTASKS` environment variable. The tasks are written
   in a simple round-robin manner over the K files. This makes no
